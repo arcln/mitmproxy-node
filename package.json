@@ -7,8 +7,7 @@
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
-    "postinstall": "node scripts/install_python_deps.js",
-    "prepare": "tsc"
+    "postinstall": "node scripts/install_python_deps.js"
   },
   "repository": {
     "type": "git",
