@@ -1,10 +1,10 @@
-import {Server as WebSocketServer} from 'ws';
-import {spawn, ChildProcess} from 'child_process';
-import {resolve} from 'path';
-import {parse as parseURL, Url} from 'url';
-import {get as httpGet} from 'http';
-import {get as httpsGet} from 'https';
-import {createConnection, Socket} from 'net';
+import { ChildProcess, spawn } from "child_process";
+import { Socket, createConnection } from "net";
+import { Url, parse as parseURL } from "url";
+import { Server as WebSocketServer } from "ws";
+import { get as httpGet } from "http";
+import { get as httpsGet } from "https";
+import { resolve } from "path";
 
 /**
  * Wait for the specified port to open.
@@ -12,7 +12,11 @@ import {createConnection, Socket} from 'net';
  * @param retries The number of times to retry before giving up. Defaults to 10.
  * @param interval The interval between retries, in milliseconds. Defaults to 500.
  */
-function waitForPort(port: number, retries: number = 10, interval: number = 500): Promise<void> {
+function waitForPort(
+  port: number,
+  retries: number = 10,
+  interval: number = 500
+): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     let retriesRemaining = retries;
     let retryInterval = interval;
@@ -34,17 +38,19 @@ function waitForPort(port: number, retries: number = 10, interval: number = 500)
       clearTimerAndDestroySocket();
 
       if (--retriesRemaining < 0) {
-        reject(new Error('out of retries'));
+        reject(new Error("out of retries"));
       }
 
-      socket = createConnection(port, "localhost", function() {
+      socket = createConnection(port, "localhost", function () {
         clearTimerAndDestroySocket();
         if (retriesRemaining >= 0) resolve();
       });
 
-      timer = setTimeout(function() { retry(); }, retryInterval);
+      timer = setTimeout(function () {
+        retry();
+      }, retryInterval);
 
-      socket.on('error', function(err) {
+      socket.on("error", function (err) {
         clearTimerAndDestroySocket();
         setTimeout(retry, retryInterval);
       });
@@ -68,8 +74,8 @@ export function nopInterceptor(m: InterceptedHTTPMessage): void {}
  * The core HTTP response.
  */
 export interface HTTPResponse {
-  statusCode: number,
-  headers: {[name: string]: string};
+  statusCode: number;
+  headers: { [name: string]: string };
   body: Buffer;
 }
 
@@ -140,7 +146,7 @@ export abstract class AbstractHTTPHeaders {
     if (index !== -1) {
       return this.headers[index][1];
     }
-    return '';
+    return "";
   }
 
   /**
@@ -189,19 +195,19 @@ export class InterceptedHTTPResponse extends AbstractHTTPHeaders {
     super(metadata.headers);
     this.statusCode = metadata.status_code;
     // We don't support chunked transfers. The proxy already de-chunks it for us.
-    this.removeHeader('transfer-encoding');
+    this.removeHeader("transfer-encoding");
     // MITMProxy decodes the data for us.
-    this.removeHeader('content-encoding');
+    this.removeHeader("content-encoding");
     // CSP is bad!
-    this.removeHeader('content-security-policy');
-    this.removeHeader('x-webkit-csp');
-    this.removeHeader('x-content-security-policy');
+    this.removeHeader("content-security-policy");
+    this.removeHeader("x-webkit-csp");
+    this.removeHeader("x-content-security-policy");
   }
 
   public toJSON(): HTTPResponseMetadata {
     return {
       status_code: this.statusCode,
-      headers: this.headers
+      headers: this.headers,
     };
   }
 }
@@ -237,12 +243,17 @@ export class InterceptedHTTPMessage {
     const metadataSize = b.readInt32LE(0);
     const requestSize = b.readInt32LE(4);
     const responseSize = b.readInt32LE(8);
-    const metadata: HTTPMessageMetadata = JSON.parse(b.toString("utf8", 12, 12 + metadataSize));
+    const metadata: HTTPMessageMetadata = JSON.parse(
+      b.toString("utf8", 12, 12 + metadataSize)
+    );
     return new InterceptedHTTPMessage(
       new InterceptedHTTPRequest(metadata.request),
       new InterceptedHTTPResponse(metadata.response),
       b.slice(12 + metadataSize, 12 + metadataSize + requestSize),
-      b.slice(12 + metadataSize + requestSize, 12 + metadataSize + requestSize + responseSize)
+      b.slice(
+        12 + metadataSize + requestSize,
+        12 + metadataSize + requestSize + responseSize
+      )
     );
   }
 
@@ -255,7 +266,12 @@ export class InterceptedHTTPMessage {
     return this._responseBody;
   }
   private _responseBody: Buffer;
-  private constructor(request: InterceptedHTTPRequest, response: InterceptedHTTPResponse, requestBody: Buffer, responseBody: Buffer) {
+  private constructor(
+    request: InterceptedHTTPRequest,
+    response: InterceptedHTTPResponse,
+    requestBody: Buffer,
+    responseBody: Buffer
+  ) {
     this.request = request;
     this.response = response;
     this.requestBody = requestBody;
@@ -269,10 +285,10 @@ export class InterceptedHTTPMessage {
   public setResponseBody(b: Buffer) {
     this._responseBody = b;
     // Update content-length.
-    this.response.setHeader('content-length', `${b.length}`);
+    this.response.setHeader("content-length", `${b.length}`);
     // TODO: Content-encoding?
   }
-  
+
   /**
    * Changes the status code of the HTTP response.
    * @param code The new status code.
@@ -285,9 +301,9 @@ export class InterceptedHTTPMessage {
    * Pack into a buffer for transmission to MITMProxy.
    */
   public toBuffer(): Buffer {
-    const metadata = Buffer.from(JSON.stringify(this.response), 'utf8');
+    const metadata = Buffer.from(JSON.stringify(this.response), "utf8");
     const metadataLength = metadata.length;
-    const responseLength = this._responseBody.length
+    const responseLength = this._responseBody.length;
     const rv = Buffer.alloc(8 + metadataLength + responseLength);
     rv.writeInt32LE(metadataLength, 0);
     rv.writeInt32LE(responseLength, 4);
@@ -301,7 +317,8 @@ export class StashedItem {
   constructor(
     public readonly rawUrl: string,
     public readonly mimeType: string,
-    public readonly data: Buffer) {}
+    public readonly data: Buffer
+  ) {}
 
   public get shortMimeType(): string {
     let mime = this.mimeType.toLowerCase();
@@ -316,11 +333,11 @@ export class StashedItem {
   }
 
   public get isJavaScript(): boolean {
-    switch(this.shortMimeType) {
-      case 'text/javascript':
-      case 'application/javascript':
-      case 'text/x-javascript':
-      case 'application/x-javascript':
+    switch (this.shortMimeType) {
+      case "text/javascript":
+      case "application/javascript":
+      case "text/x-javascript":
+      case "application/x-javascript":
         return true;
       default:
         return false;
@@ -345,11 +362,17 @@ export default class MITMProxy {
    * @param quiet If true, do not print debugging messages (defaults to 'true').
    * @param onlyInterceptTextFiles If true, only intercept text files (JavaScript/HTML/CSS/etc, and ignore media files).
    */
-  public static async Create(cb: Interceptor = nopInterceptor, interceptPaths: string[] = [], quiet: boolean = true, onlyInterceptTextFiles = false, ignoreHosts: string | null = null): Promise<MITMProxy> {
+  public static async Create(
+    cb: Interceptor = nopInterceptor,
+    interceptPaths: string[] = [],
+    quiet: boolean = true,
+    onlyInterceptTextFiles = false,
+    ignoreHosts: string | null = null
+  ): Promise<MITMProxy> {
     // Construct WebSocket server, and wait for it to begin listening.
     const wss = new WebSocketServer({ port: 8765 });
     const proxyConnected = new Promise<void>((resolve, reject) => {
-      wss.once('connection', () => {
+      wss.once("connection", () => {
         resolve();
       });
     });
@@ -357,11 +380,11 @@ export default class MITMProxy {
     // Set up WSS callbacks before MITMProxy connects.
     mp._initializeWSS(wss);
     await new Promise<void>((resolve, reject) => {
-      wss.once('listening', () => {
-        wss.removeListener('error', reject);
+      wss.once("listening", () => {
+        wss.removeListener("error", reject);
         resolve();
       });
-      wss.once('error', reject);
+      wss.once("error", reject);
     });
 
     try {
@@ -376,30 +399,40 @@ export default class MITMProxy {
         }
         // Start up MITM process.
         // --anticache means to disable caching, which gets in the way of transparently rewriting content.
-        const scriptArgs = interceptPaths.length > 0 ? ["--set", `intercept=${interceptPaths.join(",")}`] : [];
-        scriptArgs.push("--set", `onlyInterceptTextFiles=${onlyInterceptTextFiles}`);
+        const scriptArgs =
+          interceptPaths.length > 0
+            ? ["--set", `intercept=${interceptPaths.join(",")}`]
+            : [];
+        scriptArgs.push(
+          "--set",
+          `onlyInterceptTextFiles=${onlyInterceptTextFiles}`
+        );
         if (ignoreHosts) {
           scriptArgs.push(`--ignore-hosts`, ignoreHosts);
         }
 
-        const options = ["--anticache", "-s", resolve(__dirname, `../scripts/proxy.py`)].concat(scriptArgs);
+        const options = [
+          "--anticache",
+          "-s",
+          resolve(__dirname, `../scripts/proxy.py`),
+        ].concat(scriptArgs);
         if (quiet) {
-          options.push('-q');
+          options.push("-q");
         }
-        
+
         // allow self-signed SSL certificates
-        options.push("--ssl-insecure");
-        
+        // options.push("--ssl-insecure");
+
         const mitmProcess = spawn("mitmdump", options, {
-          stdio: 'inherit'
+          stdio: "inherit",
         });
         const mitmProxyExited = new Promise<void>((_, reject) => {
-          mitmProcess.once('error', reject);
-          mitmProcess.once('exit', reject);
+          mitmProcess.once("error", reject);
+          mitmProcess.once("exit", reject);
         });
         if (MITMProxy._activeProcesses.push(mitmProcess) === 1) {
-          process.on('SIGINT', MITMProxy._cleanup);
-          process.on('exit', MITMProxy._cleanup);
+          process.on("SIGINT", MITMProxy._cleanup);
+          process.on("exit", MITMProxy._cleanup);
         }
         mp._initializeMITMProxy(mitmProcess);
         // Wait for port 8080 to come online.
@@ -408,8 +441,10 @@ export default class MITMProxy {
           // Fails if mitmproxy exits before port becomes available.
           await Promise.race([mitmProxyExited, waitingForPort]);
         } catch (e) {
-          if (e && typeof(e) === 'object' && e.code === "ENOENT") {
-            throw new Error(`mitmdump, which is an executable that ships with mitmproxy, is not on your PATH. Please ensure that you can run mitmdump --version successfully from your command line.`)
+          if (e && typeof e === "object" && e.code === "ENOENT") {
+            throw new Error(
+              `mitmdump, which is an executable that ships with mitmproxy, is not on your PATH. Please ensure that you can run mitmdump --version successfully from your command line.`
+            );
           } else {
             throw new Error(`Unable to start mitmproxy: ${e}`);
           }
@@ -431,7 +466,7 @@ export default class MITMProxy {
     }
     MITMProxy._cleanupCalled = true;
     MITMProxy._activeProcesses.forEach((p) => {
-      p.kill('SIGKILL');
+      p.kill("SIGKILL");
     });
   }
 
@@ -453,12 +488,13 @@ export default class MITMProxy {
   public cb: Interceptor;
   public readonly onlyInterceptTextFiles: boolean;
   private _stash = new Map<string, StashedItem>();
-  private _stashFilter: (url: string, item: StashedItem) => boolean = defaultStashFilter;
+  private _stashFilter: (url: string, item: StashedItem) => boolean =
+    defaultStashFilter;
   public get stashFilter(): (url: string, item: StashedItem) => boolean {
     return this._stashFilter;
   }
   public set stashFilter(value: (url: string, item: StashedItem) => boolean) {
-    if (typeof(value) === 'function') {
+    if (typeof value === "function") {
       this._stashFilter = value;
     } else if (value === null) {
       this._stashFilter = defaultStashFilter;
@@ -474,21 +510,25 @@ export default class MITMProxy {
 
   private _initializeWSS(wss: WebSocketServer): void {
     this._wss = wss;
-    this._wss.on('connection', (ws) => {
-      ws.on('error', (e) => {
+    this._wss.on("connection", (ws) => {
+      ws.on("error", (e) => {
         if ((e as any).code !== "ECONNRESET") {
           console.log(`WebSocket error: ${e}`);
         }
       });
-      ws.on('message', async (message: Buffer) => {
+      ws.on("message", async (message: Buffer) => {
         const original = InterceptedHTTPMessage.FromBuffer(message);
         const rv = this.cb(original);
-        if (rv && typeof(rv) === 'object' && rv.then) {
+        if (rv && typeof rv === "object" && rv.then) {
           await rv;
         }
         // Remove transfer-encoding. We don't support chunked.
         if (this._stashEnabled) {
-          const item = new StashedItem(original.request.rawUrl, original.response.getHeader('content-type'), original.responseBody);
+          const item = new StashedItem(
+            original.request.rawUrl,
+            original.response.getHeader("content-type"),
+            original.responseBody
+          );
           if (this._stashFilter(original.request.rawUrl, item)) {
             this._stash.set(original.request.rawUrl, item);
           }
@@ -500,7 +540,7 @@ export default class MITMProxy {
 
   private _initializeMITMProxy(mitmProxy: ChildProcess): void {
     this._mitmProcess = mitmProxy;
-    this._mitmProcess.on('exit', (code, signal) => {
+    this._mitmProcess.on("exit", (code, signal) => {
       const index = MITMProxy._activeProcesses.indexOf(this._mitmProcess);
       if (index !== -1) {
         MITMProxy._activeProcesses.splice(index, 1);
@@ -513,7 +553,7 @@ export default class MITMProxy {
         this._mitmError = new Error(`Process exited due to signal ${signal}.`);
       }
     });
-    this._mitmProcess.on('error', (err) => {
+    this._mitmProcess.on("error", (err) => {
       this._mitmError = err;
     });
   }
@@ -537,30 +577,33 @@ export default class MITMProxy {
     const url = parseURL(urlString);
     const get = url.protocol === "http:" ? httpGet : httpsGet;
     return new Promise<HTTPResponse>((resolve, reject) => {
-      const req = get({
-        url: urlString,
-        headers: {
-          host: url.host
+      const req = get(
+        {
+          url: urlString,
+          headers: {
+            host: url.host,
+          },
+          host: "localhost",
+          port: 8080,
+          path: urlString,
         },
-        host: 'localhost',
-        port: 8080,
-        path: urlString
-      }, (res) => {
-        const data = new Array<Buffer>();
-        res.on('data', (chunk: Buffer) => {
-          data.push(chunk);
-        });
-        res.on('end', () => {
-          const d = Buffer.concat(data);
-          resolve({
-            statusCode: res.statusCode,
-            headers: res.headers,
-            body: d
-          } as HTTPResponse);
-        });
-        res.once('error', reject);
-      });
-      req.once('error', reject);
+        (res) => {
+          const data = new Array<Buffer>();
+          res.on("data", (chunk: Buffer) => {
+            data.push(chunk);
+          });
+          res.on("end", () => {
+            const d = Buffer.concat(data);
+            resolve({
+              statusCode: res.statusCode,
+              headers: res.headers,
+              body: d,
+            } as HTTPResponse);
+          });
+          res.once("error", reject);
+        }
+      );
+      req.once("error", reject);
     });
   }
 
@@ -577,10 +620,10 @@ export default class MITMProxy {
       };
 
       if (this._mitmProcess && !this._mitmProcess.killed) {
-        this._mitmProcess.once('exit', (code, signal) => {
+        this._mitmProcess.once("exit", (code, signal) => {
           closeWSS();
         });
-        this._mitmProcess.kill('SIGTERM');
+        this._mitmProcess.kill("SIGTERM");
       } else {
         closeWSS();
       }
